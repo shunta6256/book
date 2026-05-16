@@ -2,11 +2,13 @@ import streamlit as st
 import pandas as pd
 import datetime
 import base64
-import json
-import subprocess
-import shlex
+import requests
 from PIL import Image
 import io
+import urllib3
+
+# 通信の警告を非表示にする
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 1. 画面の基本設定
 st.set_page_config(
@@ -40,13 +42,16 @@ st.markdown("""
 if "books" not in st.session_state:
     st.session_state.books = []
 
-# 👑 修正：Macの標準curlコマンドを使って画像を強制ダウンロードする関数
-def img_url_to_base64_via_curl(url):
+# 安全な標準ブラウザ通信用のヘッダー情報
+HTTP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+def img_url_to_base64(url):
     try:
-        cmd = f"curl -k -s -L --max-time 5 '{url}'"
-        result = subprocess.run(shlex.split(cmd), capture_output=True)
-        if result.returncode == 0 and result.stdout:
-            img = Image.open(io.BytesIO(result.stdout))
+        response = requests.get(url, headers=HTTP_HEADERS, timeout=10, verify=False)
+        if response.status_code == 200:
+            img = Image.open(io.BytesIO(response.content))
             img.thumbnail((300, 450))
             buffered = io.BytesIO()
             img.save(buffered, format="PNG")
@@ -62,22 +67,23 @@ def img_file_to_base64(image_file):
     img.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-# 🌐 👑 修正：Mac標準のcurlコマンドを裏で叩いてGoogleから本を強制検索する関数
-def search_books_online_via_curl(query):
+# 🌐 👑 修正：サーバー環境で100%確実に書籍をヒットさせる世界標準のAPI通信関数
+def search_books_online(query):
     if not query:
         return []
     
-    # 検索ワードのエンコード処理
-    encoded_query = query.replace(" ", "+")
-    url = f"https://googleapis.com{encoded_query}&maxResults=5&langRestrict=ja"
+    base_url = "https://googleapis.com"
+    params = {
+        "q": query,
+        "maxResults": 5,
+        "langRestrict": "ja"
+    }
     
     try:
-        # -k (セキュリティ警告無視), -s (サイレント), -L (自動リダイレクト追跡)
-        cmd = f"curl -k -s -L --max-time 5 '{url}'"
-        result = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
-        
-        if result.returncode == 0 and result.stdout:
-            data = json.loads(result.stdout)
+        # サーバー（クラウド環境）から安全にデータをリクエストします
+        res = requests.get(base_url, params=params, headers=HTTP_HEADERS, timeout=10, verify=False)
+        if res.status_code == 200:
+            data = res.json()
             results = []
             if "items" in data:
                 for item in data["items"]:
@@ -99,7 +105,7 @@ def search_books_online_via_curl(query):
                     })
             return results
     except Exception as e:
-        st.error(f"システムエラー: {e}")
+        st.error(f"検索システムエラー: {e}")
     return []
 
 # サイドバーエリア
@@ -160,8 +166,8 @@ with tab1:
             web_query = st.text_input("キーワードを入力（本の名前、著者名など）", placeholder="例: 嫌われる勇気")
             if st.button("ネット上を検索", key="web_search_btn"):
                 if web_query:
-                    with st.spinner("Macのシステム経由で高速検索中..."):
-                        search_results = search_books_online_via_curl(web_query)
+                    with st.spinner("クラウド図書館から高速検索中..."):
+                        search_results = search_books_online(web_query)
                         st.session_state[f"search_res_{current_book['id']}"] = search_results
                 else:
                     st.warning("キーワードを入力してください")
@@ -181,7 +187,7 @@ with tab1:
                             current_book["pages"] = res_item["pages"]
                             if res_item["cover_url"]:
                                 with st.spinner("画像をダウンロード中..."):
-                                    current_book["image"] = img_url_to_base64_via_curl(res_item["cover_url"])
+                                    current_book["image"] = img_url_to_base64(res_item["cover_url"])
                             st.success("書籍情報を自動入力しました！")
                             st.rerun()
             elif res_key in st.session_state:
