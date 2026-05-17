@@ -7,6 +7,8 @@
     <!-- PWA用のメタタグ -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- FontAwesome (アイコン用) -->
+    <link rel="stylesheet" href="https://cloudflare.com">
     <style>
         :root {
             --bg-main: #0a0915; --bg-sidebar: #121026; --bg-card: rgba(255, 255, 255, 0.03);
@@ -14,60 +16,81 @@
             --purple-neon: #a188ff; --purple-main: #6c5ce7; --text-main: #f3f2fa;
             --text-sub: #8b89a6; --star-color: #ffd32a;
             --white-frame: 1px solid rgba(255, 255, 255, 0.15);
-            --ios-yellow: #ffb900; /* iPhoneメモを意識したアクセントカラー（または元のパープルを選択可能） */
+            --danger-color: #ff3b30;
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background: var(--bg-main); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
         
-        /* 💡 サイドバー（本棚リスト）：iPhoneの「フォルダ・メモ一覧」構成 */
-        .sidebar { width: 320px; background: var(--bg-sidebar); border-right: var(--white-frame); display: flex; flex-direction: column; flex-shrink: 0; transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        /* サイドバー（本棚リスト） */
+        .sidebar { width: 320px; background: var(--bg-sidebar); border-right: var(--white-frame); display: flex; flex-direction: column; flex-shrink: 0; transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); position: relative; z-index: 50; }
         
+        /* 💡 スマホ表示（幅768px以下）で上の本棚の名前を消す設定 */
         .ios-header { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; margin-top: 10px; }
         .ios-title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        .view-toggle-icons { display: flex; gap: 12px; font-size: 18px; color: var(--purple-neon); cursor: pointer; }
+        .view-toggle-icons i { opacity: 0.4; transition: opacity 0.2s; }
+        .view-toggle-icons i.active { opacity: 1; }
         
         .search-container { padding: 8px 16px; }
         .search-input { width: 100%; padding: 8px 12px; border: none; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: var(--text-main); outline: none; font-size: 15px; }
         .search-input::placeholder { color: var(--text-sub); }
         
-        /* ステータスタブ：iPhoneのセグメントコントロール風 */
+        /* ステータスタブ */
         .status-tab-container { display: flex; padding: 4px 16px 12px 16px; gap: 4px; overflow-x: auto; scrollbar-width: none; }
         .status-tab-container::-webkit-scrollbar { display: none; }
         .status-tab-btn { flex: 1; min-width: 65px; background: rgba(255, 255, 255, 0.04); border: none; color: var(--text-sub); font-size: 12px; padding: 6px 0; border-radius: 8px; cursor: pointer; font-weight: 600; text-align: center; white-space: nowrap; }
         .status-tab-btn.active { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
-        /* リストアイテム：iPhoneメモのセルを再現 */
-        .note-list { flex: 1; overflow-y: auto; padding: 0 16px 80px 16px; display: flex; flex-direction: column; }
-        .note-item { padding: 12px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; display: flex; gap: 14px; align-items: center; }
-        .note-item.active { background: transparent; }
-        .note-item.active .note-item-title { color: var(--purple-neon); }
+        /* リストコンテナ */
+        .note-list { flex: 1; overflow-y: auto; padding: 0 16px 80px 16px; display: flex; flex-direction: column; position: relative; }
+        
+        /* 💡 スワイプ削除のためのラッパー構造 */
+        .swipe-row { position: relative; width: 100%; overflow: hidden; border-bottom: 1px solid rgba(255, 255, 255, 0.05); list-style: none; }
+        .swipe-content { display: flex; gap: 14px; align-items: center; padding: 12px 0; background: var(--bg-sidebar); position: relative; z-index: 2; transition: transform 0.2s ease-out; width: 100%; cursor: pointer; }
+        .swipe-delete-btn { position: absolute; right: 0; top: 0; bottom: 0; width: 80px; background: var(--danger-color); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; z-index: 1; border: none; cursor: pointer; }
+
+        /* 通常リスト表示のスタイル */
         .note-item-cover { width: 34px; height: 46px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         .note-item-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .note-item-cover i { color: var(--text-sub); font-size: 14px; }
+        .note-item-body { flex: 1; min-width: 0; }
         .note-item-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+        .swipe-row.active .note-item-title { color: var(--purple-neon); }
         .note-item-meta { font-size: 13px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; }
         
-        /* 💡 ボトムツールバー（iPhone風固定フッター） */
+        /* 💡 写真データ（グリッド画像）で並べるモードのスタイル */
+        .note-list.grid-mode { display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 12px; padding-top: 10px; }
+        .note-list.grid-mode .swipe-row { border: none; overflow: visible; }
+        .note-list.grid-mode .swipe-delete-btn { display: none; } /* グリッド時は長押しまたは編集画面から削除 */
+        .note-list.grid-mode .swipe-content { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 0; background: transparent; transform: none !important; }
+        .note-list.grid-mode .note-item-cover { width: 100%; height: 105px; border-radius: 6px; }
+        .note-list.grid-mode .note-item-cover i { font-size: 24px; }
+        .note-list.grid-mode .note-item-body { width: 100%; }
+        .note-list.grid-mode .note-item-title { font-size: 11px; margin-bottom: 0; text-align: center; white-space: nowrap; }
+        .note-list.grid-mode .note-item-meta { display: none; }
+
+        /* ボトムツールバー */
         .bottom-toolbar { position: absolute; bottom: 0; left: 0; width: 320px; height: 60px; background: rgba(18, 16, 38, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: var(--white-frame); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 60; transition: transform 0.25s ease; }
         .toolbar-icon-btn { background: transparent; border: none; color: var(--purple-neon); font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; }
         .toolbar-icon-btn:disabled { opacity: 0.3; cursor: default; }
 
-        /* メインコンテンツエリア：メモ編集画面 */
+        /* メインコンテンツエリア */
         .main-content { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--bg-main); overflow: hidden; }
         
-        /* 編集画面のトップナビゲーションバー */
-        .ios-nav-bar { height: 50px; border-bottom: var(--white-frame); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; flex-shrink: 0; background: rgba(10, 9, 21, 0.8); backdrop-filter: blur(10px); }
-        .back-menu-btn { background: transparent; border: none; color: var(--purple-neon); font-size: 16px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 4px; padding: 0; }
+        /* ナビゲーションバー */
+        .ios-nav-bar { height: 50px; border-bottom: var(--white-frame); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; flex-shrink: 0; background: rgba(10, 9, 21, 0.8); backdrop-filter: blur(10px); z-index: 40; }
+        .back-menu-btn { background: transparent; border: none; color: var(--purple-neon); font-size: 16px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 4px; padding: 0; display: none; }
         .toggle-view-btn { background: rgba(255,255,255,0.05); border: none; color: var(--text-main); font-size: 13px; padding: 6px 14px; border-radius: 15px; cursor: pointer; font-weight: 600; }
 
         .view-content { flex: 1; display: none; overflow-y: auto; width: 100%; }
         .view-content.active { display: block; }
         
-        /* 💡 エディターコンテナ：iPhone風のシームレスなメモ用紙スタイル */
+        /* エディターコンテナ */
         .editor-container { padding: 20px; display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 800px; margin: 0 auto; }
         
-        /* メタ情報（表紙と書籍情報）をすっきり並べる */
         .editor-header { display: flex; gap: 20px; align-items: flex-start; width: 100%; border-bottom: var(--white-frame); padding-bottom: 20px; }
         .cover-dropzone { width: 85px; height: 120px; background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-sub); text-align: center; cursor: pointer; position: relative; overflow: hidden; flex-shrink: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
-        .cover-dropzone img { width: 100%; height: 100%; object-fit: cover; position: absolute; }
+        .cover-dropzone img { width: 100%; height: 100%; object-fit: cover; position: absolute; top:0; left:0; }
         
         .meta-grid { display: grid; grid-template-columns: 1fr; gap: 10px; flex: 1; }
         .meta-field { display: flex; align-items: center; gap: 12px; font-size: 14px; width: 100%; }
@@ -78,9 +101,7 @@
         .star-rating { display: flex; gap: 6px; font-size: 20px; color: rgba(255,255,255,0.1); cursor: pointer; }
         .star-rating span.selected { color: var(--star-color); }
         
-        /* 💡 本のタイトル入力欄：iPhoneメモの1行目大見出し風 */
         .input-title { width: 100%; border: none; background: transparent; color: #fff; font-size: 24px; font-weight: 700; outline: none; padding: 5px 0 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
-        /* 💡 メモテキストエリア：広大なフリー入力スペース */
         .input-memo { width: 100%; min-height: 350px; background: transparent; border: none; color: #e1e0e9; font-size: 16px; line-height: 1.6; resize: none; outline: none; padding: 0; }
         
         .no-selection { padding: 120px 20px; text-align: center; color: var(--text-sub); font-size: 15px; }
@@ -90,388 +111,386 @@
         .stats-card { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; width: 100%; }
         .stat-badges { display: flex; gap: 10px; margin-bottom: 20px; }
         .stat-badge { flex: 1; background: rgba(255, 255, 255, 0.04); padding: 12px; border-radius: 10px; font-size: 13px; font-weight: 600; text-align: center; color: var(--purple-neon); }
-        .stat-badge span { display: block; font-size: 20px; font-weight: 700; margin-top: 4px; color: #fff; }
-        .chart-title { font-size: 14px; font-weight: 600; color: var(--purple-neon); margin-bottom: 12px; }
-        .chart-row { display: flex; align-items: center; gap: 12px; font-size: 13px; margin-bottom: 10px; }
-        .chart-label { width: 40px; color: var(--text-sub); }
-        .chart-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
-        .chart-bar-fill { height: 100%; background: var(--purple-neon); width: 0%; transition: width 0.3s; }
-        .chart-value { width: 40px; text-align: right; font-weight: 600; }
 
-        /* 💡 【iPhoneレスポンシブ完全対応】全画面1ペイン切り替え */
+        /* 📱 スマートフォン特有の画面崩れ対策レスポンシブコード */
         @media (max-width: 768px) {
-            .sidebar { width: 100%; position: absolute; left: 0; top: 0; height: 100%; z-index: 50; }
+            .sidebar { width: 100%; position: absolute; top: 0; left: 0; bottom: 0; }
             .bottom-toolbar { width: 100%; }
+            .main-content { width: 100%; position: absolute; top: 0; left: 0; bottom: 0; transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
             
-            /* エディタ展開時：リストとボトムバーを左へスライドアウト */
-            body.editing .sidebar { transform: translateX(-100%); }
-            body.editing .bottom-toolbar { transform: translateX(-100%); }
+            /* 💡 スマホの時は上の本棚のタイトル文字を消去 */
+            .ios-title { display: none; }
+            .ios-header { justify-content: flex-end; } /* 切り替え用アイコンを右端に寄せる */
             
-            .main-content { width: 100%; height: 100%; z-index: 40; }
-            .editor-container { padding: 16px; }
-            .input-title { font-size: 22px; }
+            /* 詳細・編集画面が開いている時のスタイル */
+            body.detail-open .main-content { transform: translateX(0); }
+            body.detail-open .back-menu-btn { display: flex; }
         }
     </style>
 </head>
 <body>
 
-    <!-- サイドバー：本棚リスト画面 -->
-    <div class="sidebar">
+    <!-- サイドバー（本棚リスト領域） -->
+    <div class="sidebar" id="sidebar">
         <div class="ios-header">
-            <div class="ios-title">本棚 vault</div>
+            <div class="ios-title">本棚</div>
+            <!-- 💡 表示モード切り替え（リスト表示 / 写真データ一覧） -->
+            <div class="view-toggle-icons">
+                <i class="fa-solid fa-list active" id="btn-list-view" title="リスト表示" onclick="setListMode('list')"></i>
+                <i class="fa-solid fa-grid-2-large" style="margin-left: 15px;" id="btn-grid-view" class="fa-solid fa-table-cells" title="写真データ表示" onclick="setListMode('grid')"></i>
+            </div>
         </div>
         
         <div class="search-container">
-            <input type="text" class="search-input" id="search-input" placeholder="検索">
+            <input type="text" class="search-input" id="search-bar" placeholder="検索" oninput="renderBooks()">
         </div>
         
         <div class="status-tab-container">
-            <div class="status-tab-btn active" data-status="all">すべて</div>
-            <div class="status-tab-btn" data-status="reading">読中</div>
-            <div class="status-tab-btn" data-status="read">読了</div>
-            <div class="status-tab-btn" data-status="stocked">積読</div>
+            <button class="status-tab-btn active" onclick="filterStatus('all', this)">すべて</button>
+            <button class="status-tab-btn" onclick="filterStatus('読書中', this)">読書中</button>
+            <button class="status-tab-btn" onclick="filterStatus('読了', this)">読了</button>
+            <button class="status-tab-btn" onclick="filterStatus('積読', this)">積読</button>
         </div>
         
-        <div class="note-list" id="book-list">
-            <!-- 動的追加 -->
+        <!-- 本のデータリスト本体 -->
+        <div class="note-list" id="book-list-container"></div>
+        
+        <div class="bottom-toolbar">
+            <button class="toolbar-icon-btn" onclick="toggleStats()"><i class="fa-solid fa-chart-pie"></i></button>
+            <button class="toolbar-icon-btn" onclick="createNewBook()"><i class="fa-solid fa-pen-to-square"></i></button>
         </div>
     </div>
 
-    <!-- 💡 固定ボトムツールバー（一覧画面の最下部に常駐） -->
-    <div class="bottom-toolbar">
-        <button class="toolbar-icon-btn" id="delete-book-btn" disabled title="削除">🗑️</button>
-        <div style="font-size: 12px; color: var(--text-sub);" id="toolbar-count">0 冊の書籍</div>
-        <button class="toolbar-icon-btn" id="add-book-btn" title="新規追加">📝</button>
-    </div>
-
-    <!-- メインコンテンツ：メモ詳細・編集画面 -->
+    <!-- メインコンテンツ（編集・詳細画面） -->
     <div class="main-content">
         <div class="ios-nav-bar">
-            <button class="back-menu-btn" id="back-to-list-btn">＜ 本棚</button>
-            <button class="toggle-view-btn" id="toggle-stats-btn">📊 統計</button>
+            <button class="back-menu-btn" onclick="closeDetail()"><i class="fa-solid fa-chevron-left"></i> 本棚</button>
+            <button class="toggle-view-btn" id="delete-current-btn" style="background: rgba(255,59,48,0.15); color: #ff453a; display:none;" onclick="deleteCurrentBook()">削除</button>
         </div>
         
-        <!-- エディタービュー -->
-        <div class="view-content active" id="view-editor">
-            <div id="no-selection-msg" class="no-selection">
-                <p style="font-size: 32px; margin-bottom: 10px;">📖</p>
-                <p>選択されていません</p>
-            </div>
-            
-            <div class="editor-container" id="editor-form" style="display: none;">
-                <!-- 書籍情報ヘッダー -->
-                <div class="editor-header">
-                    <div class="cover-dropzone" id="cover-zone">
-                        <span id="dropzone-text">表紙を追加</span>
-                        <img src="" id="cover-preview" style="display: none;">
-                        <input type="file" id="cover-input" accept="image/*" style="display: none;">
-                    </div>
-                    
-                    <div class="meta-grid">
-                        <div class="meta-field">
-                            <span class="meta-field-label">著者</span>
-                            <input type="text" id="book-author" placeholder="著者名">
-                        </div>
-                        <div class="meta-field">
-                            <span class="meta-field-label">状態</span>
-                            <select id="book-status">
-                                <option value="stocked">積読</option>
-                                <option value="reading">読中</option>
-                                <option value="read">読了</option>
-                            </select>
-                        </div>
-                        <div class="meta-field">
-                            <span class="meta-field-label">評価</span>
-                            <div class="star-rating" id="star-container">
-                                <span data-value="1">★</span><span data-value="2">★</span><span data-value="3">★</span><span data-value="4">★</span><span data-value="5">★</span>
-                            </div>
-                        </div>
-                        <div class="meta-field">
-                            <span class="meta-field-label">読了日</span>
-                            <input type="date" id="book-date">
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 💡 iPhoneのメモ用紙ライクな入力エリア -->
-                <input type="text" id="book-title" class="input-title" placeholder="無題の本">
-                <textarea class="input-memo" id="book-memo" placeholder="ここに読書メモやフレーズを入力..."></textarea>
+        <!-- エディター表示 -->
+        <div id="view-editor" class="view-content active">
+            <div id="editor-wrapper">
+                <!-- JavaScriptで動的生成 -->
+                <div class="no-selection">書籍を選択するか、新しい書籍を追加してください。</div>
             </div>
         </div>
         
-        <!-- 統計ビュー -->
-        <div class="view-content" id="view-stats">
+        <!-- 統計表示 -->
+        <div id="view-stats" class="view-content">
             <div class="stats-container">
                 <div class="stats-card">
+                    <h3 style="margin-top:0;">読書統計</h3>
                     <div class="stat-badges">
-                        <div class="stat-badge">蔵書数<span id="stat-total">0</span></div>
-                        <div class="stat-badge">読了率<span id="stat-ratio">0%</span></div>
+                        <div class="stat-badge" id="stat-total">総書籍: 0</div>
+                        <div class="stat-badge" id="stat-done">読了: 0</div>
                     </div>
-                    
-                    <div class="chart-title">ステータス分布</div>
-                    <div id="stats-bars"></div>
+                    <p style="color:var(--text-sub); font-size:14px;">ステータス内訳</p>
+                    <div id="stat-breakdown" style="font-size:14px; display:flex; flex-direction:column; gap:8px;"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- JavaScriptロジック -->
     <script>
-        let books = JSON.parse(localStorage.getItem('my_book_vault_data')) || [];
+        // サンプルデータ構築
+        let books = JSON.parse(localStorage.getItem('my_book_vault_data')) || [
+            { id: '1', title: '銀河鉄道の夜', author: '宮沢賢治', status: '読了', rating: 5, date: '2026-05-01', cover: '', memo: '「本当の幸い」とは何かについて深く考えさせられる名著。なんども読み返したい。' },
+            { id: '2', title: '人間失格', author: '太宰治', status: '読書中', rating: 3, date: '2026-05-15', cover: '', memo: '恥の多い生涯を送って来ました。' }
+        ];
+
         let currentBookId = null;
         let currentFilter = 'all';
-        let isStatsView = false;
+        let displayMode = 'list'; // 'list' または 'grid'
+        
+        // スワイプ削除トラッキング用変数
+        let touchStartX = 0;
+        let touchMoveX = 0;
+        let activeSwipeRow = null;
 
-        const el = {
-            bookList: document.getElementById('book-list'),
-            addBtn: document.getElementById('add-book-btn'),
-            deleteBtn: document.getElementById('delete-book-btn'),
-            searchInput: document.getElementById('search-input'),
-            tabBtns: document.querySelectorAll('.status-tab-btn'),
-            editorForm: document.getElementById('editor-form'),
-            noSelectMsg: document.getElementById('no-selection-msg'),
-            toggleStatsBtn: document.getElementById('toggle-stats-btn'),
-            viewEditor: document.getElementById('view-editor'),
-            viewStats: document.getElementById('view-stats'),
-            backListBtn: document.getElementById('back-to-list-btn'),
-            toolbarCount: document.getElementById('toolbar-count'),
-            
-            title: document.getElementById('book-title'),
-            author: document.getElementById('book-author'),
-            status: document.getElementById('book-status'),
-            date: document.getElementById('book-date'),
-            memo: document.getElementById('book-memo'),
-            stars: document.querySelectorAll('#star-container span'),
-            coverZone: document.getElementById('cover-zone'),
-            coverInput: document.getElementById('cover-input'),
-            coverPreview: document.getElementById('cover-preview'),
-            dropText: document.getElementById('dropzone-text'),
-            
-            statTotal: document.getElementById('stat-total'),
-            statRatio: document.getElementById('stat-ratio'),
-            statsBars: document.getElementById('stats-bars')
-        };
-
-        function saveData() {
+        function saveToStorage() {
             localStorage.setItem('my_book_vault_data', JSON.stringify(books));
-            updateHeaderCounts();
-            renderBookList();
-            if(isStatsView) renderStats();
         }
 
-        function updateHeaderCounts() {
-            el.toolbarCount.textContent = `${books.length} 冊の書籍`;
+        // 表示モード切り替え（リスト vs 写真グリッド）
+        function setListMode(mode) {
+            displayMode = mode;
+            document.getElementById('btn-list-view').classList.toggle('active', mode === 'list');
+            document.getElementById('btn-grid-view').classList.toggle('active', mode === 'grid');
+            renderBooks();
         }
 
-        function renderBookList() {
-            el.bookList.innerHTML = '';
-            const searchWord = el.searchInput.value.toLowerCase();
+        // フィルター切り替え
+        function filterStatus(status, element) {
+            currentFilter = status;
+            document.querySelectorAll('.status-tab-btn').forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+            renderBooks();
+        }
+
+        // 本棚の一覧レンダリング
+        function renderBooks() {
+            const container = document.getElementById('book-list-container');
+            const searchQuery = document.getElementById('search-bar').value.toLowerCase();
+            container.innerHTML = '';
             
-            const filtered = books.filter(book => {
-                const matchTab = currentFilter === 'all' || book.status === currentFilter;
-                const matchSearch = (book.title || '').toLowerCase().includes(searchWord) || (book.author || '').toLowerCase().includes(searchWord);
-                return matchTab && matchSearch;
-            });
-
-            if (filtered.length === 0) {
-                el.bookList.innerHTML = '<div style="text-align:center;color:var(--text-sub);font-size:14px;padding:40px 0;">書籍がありません</div>';
-                return;
+            // モードクラスの付与
+            if (displayMode === 'grid') {
+                container.classList.add('grid-mode');
+            } else {
+                container.classList.remove('grid-mode');
             }
 
+            const filtered = books.filter(b => {
+                const matchesStatus = currentFilter === 'all' || b.status === currentFilter;
+                const matchesSearch = b.title.toLowerCase().includes(searchQuery) || b.author.toLowerCase().includes(searchQuery);
+                return matchesStatus && matchesSearch;
+            });
+
             filtered.forEach(book => {
-                const item = document.createElement('div');
-                item.className = `note-item ${book.id === currentBookId ? 'active' : ''}`;
-                item.onclick = () => selectBook(book.id);
+                const row = document.createElement('div');
+                row.className = `swipe-row ${book.id === currentBookId ? 'active' : ''}`;
+                row.dataset.id = book.id;
 
-                const starText = '★'.repeat(book.rating) + '☆'.repeat(5 - book.rating);
-                const coverHTML = book.cover ? `<img src="${book.cover}">` : `<span style="font-size:9px;color:var(--text-sub)">No Img</span>`;
-                const displayTitle = book.title.trim() === '' ? '無題の本' : book.title;
-
-                item.innerHTML = `
-                    <div class="note-item-cover">${coverHTML}</div>
-                    <div style="flex:1; min-width:0;">
-                        <div class="note-item-title">${displayTitle}</div>
-                        <div class="note-item-meta">
-                            <span>${book.author || '著者不明'}</span>
-                            <span style="color:var(--star-color); margin-left:auto;">${starText}</span>
+                const coverContent = book.cover ? `<img src="${book.cover}" alt="cover">` : `<i class="fa-solid fa-book"></i>`;
+                
+                row.innerHTML = `
+                    <div class="swipe-delete-btn" onclick="event.stopPropagation(); deleteBookById('${book.id}')">削除</div>
+                    <div class="swipe-content" 
+                         onclick="selectBook('${book.id}')"
+                         ontouchstart="handleTouchStart(event)"
+                         ontouchmove="handleTouchMove(event)"
+                         ontouchend="handleTouchEnd(event)">
+                        <div class="note-item-cover">${coverContent}</div>
+                        <div class="note-item-body">
+                            <div class="note-item-title">${book.title || '無題の書籍'}</div>
+                            <div class="note-item-meta">
+                                <span>${book.author || '著者未設定'}</span>
+                                <span>${'★'.repeat(book.rating)}${'☆'.repeat(5-book.rating)}</span>
+                            </div>
                         </div>
                     </div>
                 `;
-                el.bookList.appendChild(item);
+                container.appendChild(row);
             });
         }
 
-        function selectBook(id) {
-            currentBookId = id;
-            const book = books.find(b => b.id === id);
-            if (!book) return;
-
-            document.body.classList.add('editing');
-
-            el.title.value = book.title;
-            el.author.value = book.author;
-            el.status.value = book.status;
-            el.date.value = book.date || '';
-            el.memo.value = book.memo || '';
-            setStarRating(book.rating || 0);
-
-            if (book.cover) {
-                el.coverPreview.src = book.cover;
-                el.coverPreview.style.display = 'block';
-                el.dropText.style.display = 'none';
-            } else {
-                el.coverPreview.style.display = 'none';
-                el.dropText.style.display = 'block';
+        /* 💡 スワイプ削除のタッチイベント制御 */
+        function handleTouchStart(e) {
+            if (displayMode === 'grid') return; // グリッド時はスワイプ無効
+            const rowContent = e.currentTarget;
+            const swipeRow = rowContent.parentElement;
+            
+            // 他に開いているスワイプ行があればリセット
+            if (activeSwipeRow && activeSwipeRow !== swipeRow) {
+                resetSwipePosition(activeSwipeRow.querySelector('.swipe-content'));
             }
-
-            el.noSelectMsg.style.display = 'none';
-            el.editorForm.style.display = 'block';
-            el.deleteBtn.removeAttribute('disabled');
-
-            renderBookList();
+            
+            touchStartX = e.touches[0].clientX;
+            activeSwipeRow = swipeRow;
+            rowContent.style.transition = 'none';
         }
 
-        el.addBtn.onclick = () => {
+        function handleTouchMove(e) {
+            if (displayMode === 'grid' || !activeSwipeRow) return;
+            const rowContent = e.currentTarget;
+            touchMoveX = e.touches[0].clientX;
+            let diffX = touchMoveX - touchStartX;
+            
+            // 左側へのスワイプ（負の値）のみ許容、最大80pxまで
+            if (diffX < 0) {
+                if (diffX < -100) diffX = -100; // 行き過ぎ防止
+                rowContent.style.transform = `translateX(${diffX}px)`;
+            } else {
+                rowContent.style.transform = `translateX(0px)`;
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (displayMode === 'grid' || !activeSwipeRow) return;
+            const rowContent = e.currentTarget;
+            let diffX = touchMoveX - touchStartX;
+            
+            rowContent.style.transition = 'transform 0.2s ease-out';
+            
+            // 40px以上左にスワイプされたら削除ボタンを固定表示
+            if (diffX < -40) {
+                rowContent.style.transform = `translateX(-80px)`;
+            } else {
+                resetSwipePosition(rowContent);
+            }
+            touchStartX = 0;
+            touchMoveX = 0;
+        }
+
+        function resetSwipePosition(el) {
+            if(el) el.style.transform = 'translateX(0px)';
+        }
+
+        // ブック選択
+        function selectBook(id) {
+            currentBookId = id;
+            document.getElementById('view-stats').classList.remove('active');
+            document.getElementById('view-editor').classList.add('active');
+            document.getElementById('delete-current-btn').style.display = 'block';
+            
+            // スマホ表示用クラス追加
+            document.body.classList.add('detail-open');
+            
+            renderBooks();
+            renderEditor();
+        }
+
+        // 新規作成
+        function createNewBook() {
             const newBook = {
                 id: Date.now().toString(),
                 title: '',
                 author: '',
-                status: currentFilter === 'all' ? 'stocked' : currentFilter,
+                status: '積読',
                 rating: 0,
-                date: '',
-                memo: '',
-                cover: ''
+                date: new Date().toISOString().split('T')[0],
+                cover: '',
+                memo: ''
             };
             books.unshift(newBook);
-            saveData();
+            saveToStorage();
             selectBook(newBook.id);
-            el.title.focus();
-        };
+        }
 
-        el.deleteBtn.onclick = () => {
-            if (!currentBookId) return;
-            if (confirm('この書籍を削除しますか？')) {
-                books = books.filter(b => b.id !== currentBookId);
+        // スワイプや詳細画面からの削除
+        function deleteBookById(id) {
+            books = books.filter(b => b.id !== id);
+            saveToStorage();
+            if (currentBookId === id) {
                 currentBookId = null;
-                el.editorForm.style.display = 'none';
-                el.deleteBtn.setAttribute('disabled', 'true');
-                el.noSelectMsg.style.display = 'block';
-                document.body.classList.remove('editing');
-                saveData();
+                document.getElementById('editor-wrapper').innerHTML = '<div class="no-selection">書籍を選択するか、新しい書籍を追加してください。</div>';
+                document.getElementById('delete-current-btn').style.display = 'none';
             }
-        };
+            renderBooks();
+        }
 
-        function updateCurrentBookField(field, value) {
-            if (!currentBookId) return;
+        function deleteCurrentBook() {
+            if (currentBookId) {
+                deleteBookById(currentBookId);
+                closeDetail();
+            }
+        }
+
+        // スマホ用閉じる処理
+        function closeDetail() {
+            document.body.classList.remove('detail-open');
+            currentBookId = null;
+            renderBooks();
+        }
+
+        // エディターフォームの描画
+        function renderEditor() {
+            const wrapper = document.getElementById('editor-wrapper');
+            const book = books.find(b => b.id === currentBookId);
+            if (!book) return;
+
+            wrapper.innerHTML = `
+                <div class="editor-container">
+                    <div class="editor-header">
+                        <div class="cover-dropzone" onclick="document.getElementById('cover-file-input').click()">
+                            ${book.cover ? `<img src="${book.cover}" id="cover-preview">` : `<span id="cover-text">写真を<br>追加</span>`}
+                            <input type="file" id="cover-file-input" style="display:none;" accept="image/*" onchange="uploadCover(event)">
+                        </div>
+                        
+                        <div class="meta-grid">
+                            <div class="meta-field">
+                                <span class="meta-field-label">著者</span>
+                                <input type="text" value="${book.author}" placeholder="著者名を入力" oninput="updateData('author', this.value)">
+                            </div>
+                            <div class="meta-field">
+                                <span class="meta-field-label">状態</span>
+                                <select onchange="updateData('status', this.value)">
+                                    <option value="積読" ${book.status === '積読' ? 'selected' : ''}>積読</option>
+                                    <option value="読書中" ${book.status === '読書中' ? 'selected' : ''}>読書中</option>
+                                    <option value="読了" ${book.status === '読了' ? 'selected' : ''}>読了</option>
+                                </select>
+                            </div>
+                            <div class="meta-field">
+                                <span class="meta-field-label">日付</span>
+                                <input type="date" value="${book.date}" onchange="updateData('date', this.value)">
+                            </div>
+                            <div class="meta-field">
+                                <span class="meta-field-label">評価</span>
+                                <div class="star-rating">
+                                    ${[1,2,3,4,5].map(num => `
+                                        <span class="${num <= book.rating ? 'selected' : ''}" onclick="updateRating(${num})">★</span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <input type="text" class="input-title" value="${book.title}" placeholder="書籍のタイトル" oninput="updateData('title', this.value)">
+                    <textarea class="input-memo" placeholder="ここにメモや感想を自由に入力..." oninput="updateData('memo', this.value)">${book.memo}</textarea>
+                </div>
+            `;
+        }
+
+        // リアルタイムデータ更新
+        function updateData(key, value) {
             const book = books.find(b => b.id === currentBookId);
             if (book) {
-                book[field] = value;
-                saveData();
+                book[key] = value;
+                saveToStorage();
+                // リストアイテムのタイトル表記などを同期
+                renderBooks();
             }
         }
-        el.title.oninput = (e) => updateCurrentBookField('title', e.target.value);
-        el.author.oninput = (e) => updateCurrentBookField('author', e.target.value);
-        el.status.onchange = (e) => updateCurrentBookField('status', e.target.value);
-        el.date.onchange = (e) => updateCurrentBookField('date', e.target.value);
-        el.memo.oninput = (e) => updateCurrentBookField('memo', e.target.value);
 
-        function setStarRating(rating) {
-            el.stars.forEach(star => {
-                const val = parseInt(star.getAttribute('data-value'));
-                if (val <= rating) {
-                    star.classList.add('selected');
-                } else {
-                    star.classList.remove('selected');
-                }
-            });
+        function updateRating(rating) {
+            const book = books.find(b => b.id === currentBookId);
+            if (book) {
+                book.rating = rating;
+                saveToStorage();
+                renderEditor();
+                renderBooks();
+            }
         }
-        el.stars.forEach(star => {
-            star.onclick = () => {
-                const val = parseInt(star.getAttribute('data-value'));
-                setStarRating(val);
-                updateCurrentBookField('rating', val);
-            };
-        });
 
-        el.coverZone.onclick = () => el.coverInput.click();
-        el.coverInput.onchange = (e) => {
-            const file = e.target.files[0];
+        // 写真データのアップロード（Base64圧縮）
+        function uploadCover(event) {
+            const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = function(event) {
-                const base64Data = event.target.result;
-                el.coverPreview.src = base64Data;
-                el.coverPreview.style.display = 'block';
-                el.dropText.style.display = 'none';
-                updateCurrentBookField('cover', base64Data);
+            reader.onload = function(e) {
+                const base64Url = e.target.result;
+                updateData('cover', base64Url);
+                renderEditor();
             };
             reader.readAsDataURL(file);
-        };
-
-        el.searchInput.oninput = () => renderBookList();
-        el.tabBtns.forEach(tab => {
-            tab.onclick = () => {
-                el.tabBtns.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                currentFilter = tab.getAttribute('data-status');
-                renderBookList();
-            };
-        });
-
-        el.backListBtn.onclick = () => {
-            document.body.classList.remove('editing');
-            currentBookId = null;
-            el.deleteBtn.setAttribute('disabled', 'true');
-            renderBookList();
-        };
-
-        el.toggleStatsBtn.onclick = () => {
-            isStatsView = !isStatsView;
-            if (isStatsView) {
-                el.viewEditor.classList.remove('active');
-                el.viewStats.classList.add('active');
-                el.toggleStatsBtn.textContent = '📝 メモ';
-                renderStats();
-            } else {
-                el.viewStats.classList.remove('active');
-                el.viewEditor.classList.add('active');
-                el.toggleStatsBtn.textContent = '📊 統計';
-            }
-        };
-
-        function renderStats() {
-            const total = books.length;
-            const counts = { reading: 0, read: 0, stocked: 0 };
-            books.forEach(b => counts[b.status] = (counts[b.status] || 0) + 1);
-
-            const ratio = total > 0 ? Math.round((counts.read / total) * 100) : 0;
-            
-            el.statTotal.textContent = total;
-            el.statRatio.textContent = ratio + '%';
-
-            const labels = { reading: '読中', read: '読了', stocked: '積読' };
-            el.statsBars.innerHTML = '';
-
-            ['read', 'reading', 'stocked'].forEach(status => {
-                const count = counts[status] || 0;
-                const pct = total > 0 ? (count / total) * 100 : 0;
-
-                const row = document.createElement('div');
-                row.className = 'chart-row';
-                row.innerHTML = `
-                    <div class="chart-label">${labels[status]}</div>
-                    <div class="chart-bar-bg">
-                        <div class="chart-bar-fill" style="width: ${pct}%"></div>
-                    </div>
-                    <div class="chart-value">${count} 冊</div>
-                `;
-                el.statsBars.appendChild(row);
-            });
         }
 
-        updateHeaderCounts();
-        renderBookList();
-    </script>
-</body>
-</html>
+        // 統計画面
+        function toggleStats() {
+            const statsView = document.getElementById('view-stats');
+            const editorView = document.getElementById('view-editor');
+            
+            if(statsView.classList.contains('active')) {
+                statsView.classList.remove('active');
+                editorView.classList.add('active');
+            } else {
+                editorView.classList.remove('active');
+                statsView.classList.add('active');
+                document.body.classList.add('detail-open');
+                buildStats();
+            }
+        }
+
+        function buildStats() {
+            document.getElementById('stat-total').innerText = `総書籍: ${books.length}`;
+            const doneCount = books.filter(b => b.status === '読了').length;
+            document.getElementById('stat-done').innerText = `読了: ${doneCount}`;
+            
+            const counts = { '読書中': 0, '読了': 0, '積読': 0 };
+            books.forEach(b => { if(counts[b.status] !== undefined) counts[b.status]++; });
+
+            const breakdown = document.getElementById('stat-breakdown');
+            breakdown.innerHTML = Object.keys(counts).map(key => `
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(2
